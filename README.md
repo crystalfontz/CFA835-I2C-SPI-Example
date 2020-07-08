@@ -1,4 +1,4 @@
- # Crystalfontz CFA835 module I2C / SPI communications example.
+ # Crystalfontz CFA835 Module I2C / SPI Communications Arduino Example
  
  This example is designed to run on a Seeeduino v4.2 development board.  
  It should also run on an Arduino Uno with minimal (or no) changes.  
