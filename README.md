@@ -6,8 +6,8 @@
  This example may also work with other Crystalfontz Intelligent packet based
  displays that use an I2C / SPI interface, but it has not been tested as yet.  
 
- Mark Williams (2020)
- Distributed under the "The Unlicense".
- http://unlicense.org
- This is free and unencumbered software released into the public domain.
- For more details, see the website above.
+ Mark Williams (2020)  
+ Distributed under the "The Unlicense".  
+ http://unlicense.org  
+ This is free and unencumbered software released into the public domain.  
+ For more details, see the website above.  
