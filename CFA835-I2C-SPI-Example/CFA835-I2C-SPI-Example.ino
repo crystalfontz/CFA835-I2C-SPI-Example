@@ -35,15 +35,25 @@
 //   in this mode, upload the project to the Seeeduino/Arduino, then cfTest or other software on the host PC
 //   to communicate with the module.
 
+// Misc standalone settings
+#define STANDALONE_LOOP_DELAY     4000   /*=4 updates/sec*/
+#define STANDALONE_EXTENDED_INFO        /*show extra packet count info on display*/
+
 //interface selection (select one)
 #define IFACE_I2C
 //#define IFACE_SPI
+
+// TODO - add serial interface to module
+
+//using DATA READY PIN (needed for I2C, but optional for SPI)
+//#define IFACE_HAVE_DATA_READY
 
 //I2C Interface connections
 // SEEEDUNIO <-> CFA835
 // SCL <-> H1-P4
 // SDA <-> H1-P3
 // PIN9 <-> H1-P13 (data ready)
+// GND <-> H1-P15 (ground)
 
 //SPI Interface connections
 // SEEEDUNIO <-> CFA835
@@ -52,6 +62,7 @@
 // SCK/PIN13 <-> H1-P10
 // PIN10 <-> H1-P9 (slave select)
 // PIN9 <-> H1-P12 (data ready)
+// GND <-> H1-P15 (ground)
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -72,22 +83,22 @@
 //interface settings
 #ifdef IFACE_I2C
 #include <Wire.h>
-# define IFACE_I2C_ADDR		0x44
-# define IFACE_I2C_SPEED	100000
-# define IFACE_I2C_READY	9
-# define IFACE_I2C_REQ_LEN	16
+# define IFACE_I2C_ADDR		  0x44
+# define IFACE_I2C_SPEED	  100000
+# define IFACE_I2C_READY	  9
+# define IFACE_I2C_REQ_LEN	4
 #endif
 #ifdef IFACE_SPI
 # include <SPI.h>
-# define IFACE_SPI_SPEED	1000000
+# define IFACE_SPI_SPEED	  500000
 # define IFACE_SPI_BITFIRST	MSBFIRST
-# define IFACE_SPI_MODE		SPI_MODE0
-# define IFACE_SPI_SS		10
-# define IFACE_SPI_READY	9
+# define IFACE_SPI_MODE		  SPI_MODE0
+# define IFACE_SPI_SS		    10
+# define IFACE_SPI_READY  	9
 # define IFACE_SPI_REQ_LEN	16
 #endif
 
-#define IFACE_READY_WAIT	100 /*mS*/
+#define IFACE_READY_WAIT	50 /*mS*/
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -102,7 +113,7 @@
 //getPacketFromFIFO() can deal with any garbage data
 //also, the smaller the buffer, the more often you need to call getPacketFromFIFO() to make sure
 //the incoming FIFO buffer does not overflow.
-#define FIFO_IN_LENGTH			(PACKET_MAX_DATA_LENGTH*4)
+#define FIFO_IN_LENGTH			(PACKET_MAX_DATA_LENGTH*8)
 
 typedef union
 {
@@ -157,7 +168,9 @@ void setup()
 #ifdef IFACE_SPI
 	pinMode(IFACE_SPI_SS, OUTPUT); //SPI-SS
 	digitalWrite(IFACE_SPI_SS, HIGH); //SS deselect
+#ifdef IFACE_SPI_READY
 	pinMode(IFACE_SPI_READY, INPUT); //SPI-Ready
+#endif  
 	SPI.begin();
 #endif
 }
@@ -224,7 +237,9 @@ void standaloneMode(void)
 
 	CFAPacket_t outPacket;
 	CFAPacket_t inPacket;
-	uint16_t countSent, countRecv, loopCount;
+	uint32_t countSent, countRecv, loopCount;
+  uint32_t tempSent;
+  uint32_t tempRecv;
 	char temps[32];
 
 	countSent = 0;
@@ -232,24 +247,57 @@ void standaloneMode(void)
 	loopCount = 0;
 	while (1)
 	{
+    tempSent = countSent;
+    tempRecv = countRecv;
+
 		//send a ping packet
 		outPacket.command = PCMD2_PING;
 		outPacket.length = sprintf((char*)outPacket.data, "PING-ME-%u", loopCount);
 		//outPacket.length = sprintf((char*)outPacket.data, "ABCDEFGHIJKLMNOPQ");
 		sendPacket(&outPacket);
 		countSent++;
+    recieveData(IFACE_READY_WAIT);
 
 		//send a display packet
 		outPacket.command = PCMD2_LCD_WRITE;
 		outPacket.length = 0;
 		outPacket.data[outPacket.length++] = 0; //lcd column
 		outPacket.data[outPacket.length++] = 0; //lcd row
-		outPacket.length += sprintf((char*)&outPacket.data[outPacket.length], "Loops: %u", loopCount);
+		outPacket.length += sprintf((char*)&outPacket.data[outPacket.length], "Loops  : %08lu ", loopCount);
 		sendPacket(&outPacket);
 		countSent++;
+    recieveData(IFACE_READY_WAIT);
 
-		//buffer up all raw reply data from module
-		recieveData(IFACE_READY_WAIT);
+#ifdef STANDALONE_EXTENDED_INFO
+    //extended display info
+		outPacket.command = PCMD2_LCD_WRITE;
+		outPacket.length = 0;
+		outPacket.data[outPacket.length++] = 0; //lcd column
+		outPacket.data[outPacket.length++] = 1; //lcd row
+		outPacket.length += sprintf((char*)&outPacket.data[outPacket.length], "Pkt Out: %08lu ", tempSent);
+		sendPacket(&outPacket);
+		countSent++;    
+    recieveData(IFACE_READY_WAIT);
+    //
+    outPacket.command = PCMD2_LCD_WRITE;
+		outPacket.length = 0;
+		outPacket.data[outPacket.length++] = 0; //lcd column
+		outPacket.data[outPacket.length++] = 2; //lcd row
+		outPacket.length += sprintf((char*)&outPacket.data[outPacket.length], "Pkt In : %08lu ", tempRecv);
+		sendPacket(&outPacket);
+		countSent++;    
+    recieveData(IFACE_READY_WAIT);
+    //
+    outPacket.command = PCMD2_LCD_WRITE;
+		outPacket.length = 0;
+		outPacket.data[outPacket.length++] = 0; //lcd column
+		outPacket.data[outPacket.length++] = 3; //lcd row
+		outPacket.length += sprintf((char*)&outPacket.data[outPacket.length], "Diff   : %04d ", (int)tempSent - (int)tempRecv);
+		sendPacket(&outPacket);
+		countSent++;
+    recieveData(IFACE_READY_WAIT);
+#endif    
+
 		//sift through raw data for valid packets
 		while (getPacketFromFIFO(&moduleInFIFO, &inPacket))
 		{
@@ -259,12 +307,12 @@ void standaloneMode(void)
 		}
 
 		//debug print sent & recieved packet counts
-		sprintf(temps, "Sent:%d Recv:%d", countSent, countRecv);
+		sprintf(temps, "Sent:%lu Recv:%lu", countSent, countRecv);
 		Serial.println(temps);
 
 		//loop delay
 		loopCount++;
-		delay(250);
+		delay(STANDALONE_LOOP_DELAY);
 	}
 }
 #endif
@@ -320,10 +368,14 @@ bool sendPacket(CFAPacket_t *packet)
 		outbuf[c++] = packet->data[i];
 	outbuf[c++] = packet->CRC.b[0];
 	outbuf[c++] = packet->CRC.b[1];
-	//I2c.write(IFACE_I2C_ADDR, outbuf, packet->length+4);
+//  Wire.setWireTimeout(1000000, true); //1000mS timeout
 	Wire.beginTransmission(IFACE_I2C_ADDR);
 	Wire.write(outbuf, packet->length+4);
 	Wire.endTransmission();
+  /*if (Wire.getWireTimeoutFlag())
+    Serial.write("data write timeout\n");
+  else
+    Serial.write("data sent\n");  */
 #endif
 #ifdef IFACE_SPI
 	//any time we write SPI data, we also buffer up incoming data
@@ -366,14 +418,9 @@ uint16_t recieveData(uint16_t readyWaitmS)
 	}
 
 	//while the ready pin is low, there is data to read, get it
-	while(digitalRead(IFACE_I2C_READY) == LOW)
+	Wire.setWireTimeout(1000000, true); //1000mS timeout
+  while(digitalRead(IFACE_I2C_READY) == LOW)
 	{
-		//NOTE!!!
-		//The Arduino I2C Wire library has no timeouts
-		//If requestFrom() requests data, but doesnt get anything back it can hang.
-		//Best idea would be to use an alternate library. We use the Wire lib here
-		//for compatibility.
-
 		//req I2C data
 		Wire.requestFrom(IFACE_I2C_ADDR, IFACE_I2C_REQ_LEN);
 		while(Wire.available())
@@ -407,6 +454,8 @@ uint16_t recieveData(uint16_t readyWaitmS)
 
 	//wait for ready pin to go low indicating data is ready to read
 	//to exit immediatley if ready is not low, use recieveData(0)
+#ifdef IFACE_HAVE_DATA_READY  
+
 	timeout = millis() + readyWaitmS;
 	while (digitalRead(IFACE_SPI_READY) == HIGH)
 	{
@@ -414,7 +463,6 @@ uint16_t recieveData(uint16_t readyWaitmS)
 			//wait timeout
 			return 0;
 	}
-
 	SPI.beginTransaction(spiSettings);
 	digitalWrite(IFACE_SPI_SS, LOW); //slave-select
 	while (digitalRead(IFACE_SPI_READY) == LOW)
@@ -434,6 +482,41 @@ uint16_t recieveData(uint16_t readyWaitmS)
 	//done
 	digitalWrite(IFACE_SPI_SS, HIGH); //slave-deselect
 	SPI.endTransaction();
+  
+#else
+  
+  //no IFACE_SPI_READY used
+	SPI.beginTransaction(spiSettings);
+	digitalWrite(IFACE_SPI_SS, LOW); //slave-select
+  uint8_t datarep_count = 0;
+  uint8_t last_data = 0;
+  while (datarep_count < 3)
+  {
+    //read data, send 0xFF's
+		//to get data we need to send data, so just send 0xFF's
+		data = SPI.transfer(0xFF);
+		//put it in our incoming buffer. getPacketFromFIFO() takes care of
+		//removing any trash bytes between packets
+		if (!FIFO_Push(&moduleInFIFO, data))
+			//returns false if FIFO is full
+			//stop reading
+			break;
+    //check for data repetition
+    //we have no way of knowing when the module has no more data to
+    //send, so we'll stop when the last byte has been repeated three times
+    datarep_count++;
+    if (last_data != data)
+    {
+      datarep_count = 0;
+      last_data = data;
+    }
+    count++;
+  }
+  //done
+	digitalWrite(IFACE_SPI_SS, HIGH); //slave-deselect
+	SPI.endTransaction();
+#endif
+
 	//return data read qty
 	return count;
 }
@@ -445,6 +528,7 @@ bool getPacketFromFIFO(FIFO_t *FIFO, CFAPacket_t *packet)
 	FIFO_LENGTH_TYPE	positionCount;
 	FIFO_LENGTH_TYPE	inQueue;
 	FIFO_LENGTH_TYPE	i;
+  uint8_t           DataBuf;
 
 	//check for enough data in fifo
 	inQueue = FIFO_Count(FIFO);
@@ -474,7 +558,10 @@ bool getPacketFromFIFO(FIFO_t *FIFO, CFAPacket_t *packet)
 				//valid CRC, is a packet (packet ready to be returned)
 				//remove packet (and data before it) from the queue
 				//quick adjust FIFO length
-				FIFO->Tail += positionCount + packet->length + PACKET_HEADER_SIZE;
+				//FIFO->Tail += positionCount + packet->length + PACKET_HEADER_SIZE;
+        //^^ dont do this anymore
+        for (i = 0; i < (positionCount + packet->length + PACKET_HEADER_SIZE); i++)
+          FIFO_Pop(FIFO, &DataBuf);
 				//done
 				return true;
 			}
@@ -485,7 +572,10 @@ bool getPacketFromFIFO(FIFO_t *FIFO, CFAPacket_t *packet)
 	if (inQueue > PACKET_MAX_SIZE(PACKET_CFA835_DATA_SIZE))
 	{
 		//quick adjust FIFO length
-		FIFO->Tail += inQueue - PACKET_MAX_SIZE(PACKET_CFA835_DATA_SIZE);
+		//FIFO->Tail += inQueue - PACKET_MAX_SIZE(PACKET_CFA835_DATA_SIZE);
+    //^^ dont do this anymore
+    for (i = 0; i < packet->length + PACKET_HEADER_SIZE; i++)
+      FIFO_Pop(FIFO, &DataBuf);
 	}
 
 	//done
