@@ -27,18 +27,18 @@
 #define FIFO_VOLATILE
 //#define FIFO_NOCHECKS
 
-#define FIFO_DATA_TYPE		uint8_t
-#define FIFO_LENGTH_TYPE	uint16_t
-#define FIFO_BOOL_TYPE		bool
-#define FIFO_BOOL_TRUE		true
-#define FIFO_BOOL_FALSE		false
+#define FIFO_DATA_TYPE uint8_t
+#define FIFO_LENGTH_TYPE uint16_t
+#define FIFO_BOOL_TYPE bool
+#define FIFO_BOOL_TRUE true
+#define FIFO_BOOL_FALSE false
 
 typedef struct
 {
-    FIFO_VOLATILE FIFO_LENGTH_TYPE		Head;		// first byte of data
-    FIFO_VOLATILE FIFO_LENGTH_TYPE		Tail;		// last byte of data
-    FIFO_VOLATILE FIFO_DATA_TYPE		*Buffer;	// block of memory or array of data
-    FIFO_LENGTH_TYPE					Length;     // length of the data
+  FIFO_VOLATILE FIFO_LENGTH_TYPE Head;   // first byte of data
+  FIFO_VOLATILE FIFO_LENGTH_TYPE Tail;   // last byte of data
+  FIFO_VOLATILE FIFO_DATA_TYPE *Buffer;  // block of memory or array of data
+  FIFO_LENGTH_TYPE Length;               // length of the data
 } FIFO_t;
 
 FIFO_t *FIFO_Init(FIFO_t *FIFO, FIFO_DATA_TYPE *Buffer, FIFO_LENGTH_TYPE Size);
